@@ -1,0 +1,118 @@
+
+# =========================
+# PYTHON
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# =========================
+# VIRTUAL ENVIRONMENTS
+# =========================
+venv/
+.venv/
+env/
+ENV/
+backend/venv/
+frontend/venv/
+
+# =========================
+# ENV FILES
+# =========================
+.env
+.env.*
+*.env
+
+# =========================
+# VIDEO / AUDIO FILES
+# =========================
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.flac
+
+Video_File/
+uploads/
+backend/uploads/
+
+# =========================
+# GENERATED OUTPUT FILES
+# =========================
+*.json
+*.txt
+*.png
+*.jpg
+*.jpeg
+*.csv
+
+# =========================
+# JUPYTER NOTEBOOK CHECKPOINTS
+# =========================
+.ipynb_checkpoints/
+
+# Ignore notebooks if you don't want them in Git
+*.ipynb
+
+# =========================
+# MODEL FILES
+# =========================
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# =========================
+# LOG FILES
+# =========================
+*.log
+logs/
+
+# =========================
+# BUILD FILES
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# CACHE
+# =========================
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =========================
+# OS FILES
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# IDE FILES
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# TEMP FILES
+# =========================
+*.tmp
+*.temp
+*.bak
+*.old
+
+# =========================
+# STREAMLIT (if used later)
+# =========================
+.streamlit/
+
