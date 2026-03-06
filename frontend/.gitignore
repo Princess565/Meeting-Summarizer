@@ -1,38 +1,72 @@
+# =========================
 # Python
+# =========================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Virtual Environment
+# =========================
+# Virtual Environments
+# =========================
 venv/
-env/
 .venv/
+env/
+ENV/
+backend/venv/
+frontend/venv/
 
+# =========================
 # Environment Variables
+# =========================
 .env
+.env.*
 
-# Uploads
+# =========================
+# Video / Audio Files
+# =========================
+Video_File/
 uploads/
+backend/uploads/
 
-# Whisper model cache
-.cache/
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.flac
 
-# Logs
+# =========================
+# Generated Files
+# =========================
+*.json
 *.log
+*.tmp
+*.temp
 
-# OS files
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# OS Files
+# =========================
 .DS_Store
 Thumbs.db
 
-# IDE
+# =========================
+# IDE Files
+# =========================
 .vscode/
 .idea/
 
-# Build
+# =========================
+# Build / Cache
+# =========================
 build/
 dist/
-
-# Temporary files
-*.tmp
-*.temp
+*.egg-info/
+.pytest_cache/
