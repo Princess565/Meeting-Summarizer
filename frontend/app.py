@@ -3,19 +3,19 @@ import requests
 import pandas as pd
 import json
 
-# 🔥 Your LIVE Render backend
-BACKEND_URL = "https://five65-meeting-summarizer.onrender.com"
+# 🔥 Live Render Backend
+BACKEND_URL = BACKEND_URL = "http://backend:8000"
 
 st.set_page_config(page_title="Meeting Summarizer", layout="wide")
 
 st.title("🎙 Meeting Summarizer AI")
 
 uploaded_file = st.file_uploader(
-    "Upload an audio file",
+    "Upload an audio or video file",
     type=["wav", "mp3", "mp4"]
 )
 
-if uploaded_file is not None:
+if uploaded_file:
 
     st.audio(uploaded_file)
 
@@ -29,12 +29,12 @@ if uploaded_file is not None:
             )
         }
 
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+        progress = st.progress(0)
+        status = st.empty()
 
         try:
-            status_text.text("Uploading file...")
-            progress_bar.progress(20)
+            status.text("Sending file to backend...")
+            progress.progress(30)
 
             response = requests.post(
                 f"{BACKEND_URL}/summarize",
@@ -42,63 +42,76 @@ if uploaded_file is not None:
                 timeout=600
             )
 
-            progress_bar.progress(60)
-            status_text.text("Processing with AI...")
+            progress.progress(70)
+            status.text("Waiting for AI response...")
 
-            if response.status_code == 200:
+            progress.progress(100)
 
-                result = response.json()
+            # If backend failed, show full error
+            if response.status_code != 200:
+                st.error("Backend Error ❌")
+                st.write("Status Code:", response.status_code)
+                st.code(response.text)
+                st.stop()
 
-                progress_bar.progress(100)
-                status_text.text("Completed ✅")
+            result = response.json()
 
-                # Summary
-                st.subheader("📝 Summary")
-                st.write(result.get("summary", ""))
+            status.text("Completed ✅")
 
-                # Transcript
-                st.subheader("📄 Full Transcript")
-                st.text_area(
-                    "Transcript",
-                    result.get("transcript", ""),
-                    height=300
-                )
+            # Summary
+            st.subheader("📝 Summary")
+            st.write(result.get("summary", ""))
 
-                # Speakers
-                st.subheader("🗣 Speakers")
-                speakers = result.get("speakers", [])
-                if speakers:
-                    st.dataframe(pd.DataFrame(speakers))
+            # Transcript
+            st.subheader("📄 Transcript")
+            st.text_area(
+                "Full Transcript",
+                result.get("transcript", ""),
+                height=300
+            )
 
-                # Action Items
-                st.subheader("📌 Action Items")
-                action_items = result.get("action_items", [])
-                if action_items:
-                    st.dataframe(pd.DataFrame(action_items))
-
-                # Key Questions
-                st.subheader("❓ Key Questions")
-                key_questions = result.get("key_questions", [])
-                if key_questions:
-                    st.dataframe(pd.DataFrame(key_questions))
-
-                # Download JSON
-                st.subheader("⬇ Download Results")
-                json_data = json.dumps(result, indent=4)
-
-                st.download_button(
-                    "Download Full Report (JSON)",
-                    json_data,
-                    "meeting_summary.json",
-                    "application/json"
-                )
-
+            # Speakers
+            st.subheader("🗣 Speakers")
+            speakers = result.get("speakers", [])
+            if speakers:
+                st.dataframe(pd.DataFrame(speakers))
             else:
-                progress_bar.progress(100)
-                status_text.text("Error ❌")
-                st.error(response.text)
+                st.info("No speaker data available.")
 
-        except requests.exceptions.RequestException as e:
-            progress_bar.progress(100)
-            status_text.text("Connection Failed ❌")
-            st.error(str(e))
+            # Action Items
+            st.subheader("📌 Action Items")
+            actions = result.get("action_items", [])
+            if actions:
+                st.dataframe(pd.DataFrame(actions))
+            else:
+                st.info("No action items found.")
+
+            # Key Questions
+            st.subheader("❓ Key Questions")
+            questions = result.get("key_questions", [])
+            if questions:
+                st.dataframe(pd.DataFrame(questions))
+            else:
+                st.info("No key questions found.")
+
+            # Download JSON
+            st.subheader("⬇ Download Report")
+
+            json_data = json.dumps(result, indent=4)
+
+            st.download_button(
+                "Download Full Report (JSON)",
+                data=json_data,
+                file_name="meeting_summary.json",
+                mime="application/json"
+            )
+
+        except requests.exceptions.Timeout:
+            st.error("Request timed out. The backend took too long.")
+
+        except requests.exceptions.ConnectionError:
+            st.error("Cannot connect to backend. Check Render deployment.")
+
+        except Exception as e:
+            st.error("Unexpected error occurred.")
+            st.code(str(e))

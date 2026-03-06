@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from google import genai
 import whisper
+import torch
 
 # ----------------------------
 # Environment
@@ -23,7 +24,7 @@ if not api_key:
 client = genai.Client(api_key=api_key)
 
 # ----------------------------
-# App
+# FastAPI
 # ----------------------------
 app = FastAPI()
 
@@ -43,21 +44,24 @@ UPLOAD_FOLDER = BASE_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
 
 # ----------------------------
-# Whisper (Lazy Loading)
+# Whisper (Lazy Load)
 # ----------------------------
 whisper_model = None
 
 def get_whisper_model():
     global whisper_model
+
     if whisper_model is None:
-        # Use tiny for Render memory limit
-        whisper_model = whisper.load_model("tiny")
+        torch.set_num_threads(1)
+        whisper_model = whisper.load_model("tiny", device="cpu")
+
     return whisper_model
 
 # ----------------------------
-# Utility Functions
+# Audio Extraction
 # ----------------------------
 def extract_audio(video_path, audio_path):
+
     command = [
         "ffmpeg",
         "-y",
@@ -69,18 +73,27 @@ def extract_audio(video_path, audio_path):
         audio_path
     ]
 
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
 
     if result.returncode != 0:
-        raise HTTPException(status_code=500, detail="Audio extraction failed.")
+        raise HTTPException(status_code=500, detail="Audio extraction failed")
 
+# ----------------------------
+# Transcription
+# ----------------------------
 def transcribe_audio(audio_path):
+
     try:
         model = get_whisper_model()
         result = model.transcribe(audio_path)
         return result["text"]
+
     except Exception:
-        raise HTTPException(status_code=500, detail="Transcription failed.")
+        raise HTTPException(status_code=500, detail="Transcription failed")
 
 # ----------------------------
 # Routes
@@ -93,30 +106,27 @@ def root():
 def health():
     return {"status": "ok"}
 
+# ----------------------------
+# Summarize Endpoint
+# ----------------------------
 @app.post("/summarize")
 async def summarize(file: UploadFile = File(...)):
 
-    try:
-        unique_name = f"{uuid.uuid4()}_{file.filename}"
-        file_path = UPLOAD_FOLDER / unique_name
+    unique_name = f"{uuid.uuid4()}_{file.filename}"
+    file_path = UPLOAD_FOLDER / unique_name
+    audio_path = UPLOAD_FOLDER / f"{unique_name}.wav"
 
-        # Save file
+    try:
+
+        # Save upload
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Extract audio
-        audio_path = UPLOAD_FOLDER / f"{unique_name}.wav"
         extract_audio(str(file_path), str(audio_path))
 
         # Transcribe
         transcript = transcribe_audio(str(audio_path))
-
-        # Clean temp files (VERY IMPORTANT for Render memory)
-        try:
-            os.remove(file_path)
-            os.remove(audio_path)
-        except:
-            pass
 
         # Gemini Prompt
         prompt = f"""
@@ -141,9 +151,7 @@ Transcript:
         raw_text = response.text.strip()
 
         if raw_text.startswith("```"):
-            raw_text = raw_text.replace("```json", "")
-            raw_text = raw_text.replace("```", "")
-            raw_text = raw_text.strip()
+            raw_text = raw_text.replace("```json", "").replace("```", "").strip()
 
         result = json.loads(raw_text)
 
@@ -151,12 +159,15 @@ Transcript:
             "summary": result.get("summary", ""),
             "action_items": result.get("action_items", []),
             "key_questions": result.get("key_questions", []),
-            "transcript": transcript,
-            "speakers": result.get("speakers", [])
+            "speakers": result.get("speakers", []),
+            "transcript": transcript
         }
-
-    except HTTPException:
-        raise
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    finally:
+        # Clean files
+        for f in [file_path, audio_path]:
+            if os.path.exists(f):
+                os.remove(f)
