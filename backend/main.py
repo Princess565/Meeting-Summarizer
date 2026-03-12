@@ -10,23 +10,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from google import genai
 import whisper
-import torch
 
 # ----------------------------
-# Environment
+# Load Environment Variables
 # ----------------------------
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise RuntimeError("GEMINI_API_KEY not found.")
+API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    raise RuntimeError("GEMINI_API_KEY not found in .env file")
 
-client = genai.Client(api_key=api_key)
+client = genai.Client(api_key=API_KEY)
 
 # ----------------------------
-# FastAPI
+# FastAPI App
 # ----------------------------
-app = FastAPI()
+app = FastAPI(title="Meeting Summarizer API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,27 +39,18 @@ app.add_middleware(
 # Paths
 # ----------------------------
 BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_FOLDER = BASE_DIR / "uploads"
-UPLOAD_FOLDER.mkdir(exist_ok=True)
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ----------------------------
-# Whisper (Lazy Load)
+# Load Whisper Model
 # ----------------------------
-whisper_model = None
-
-def get_whisper_model():
-    global whisper_model
-
-    if whisper_model is None:
-        torch.set_num_threads(1)
-        whisper_model = whisper.load_model("tiny", device="cpu")
-
-    return whisper_model
+whisper_model = whisper.load_model("tiny")
 
 # ----------------------------
-# Audio Extraction
+# Extract Audio with FFmpeg
 # ----------------------------
-def extract_audio(video_path, audio_path):
+def extract_audio(video_path: str, audio_path: str):
 
     command = [
         "ffmpeg",
@@ -73,27 +63,28 @@ def extract_audio(video_path, audio_path):
         audio_path
     ]
 
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    result = subprocess.run(command, capture_output=True)
 
     if result.returncode != 0:
-        raise HTTPException(status_code=500, detail="Audio extraction failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Audio extraction failed"
+        )
 
 # ----------------------------
-# Transcription
+# Transcribe Audio
 # ----------------------------
-def transcribe_audio(audio_path):
+def transcribe_audio(audio_path: str):
 
     try:
-        model = get_whisper_model()
-        result = model.transcribe(audio_path)
+        result = whisper_model.transcribe(audio_path)
         return result["text"]
 
     except Exception:
-        raise HTTPException(status_code=500, detail="Transcription failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Transcription failed"
+        )
 
 # ----------------------------
 # Routes
@@ -113,22 +104,23 @@ def health():
 async def summarize(file: UploadFile = File(...)):
 
     unique_name = f"{uuid.uuid4()}_{file.filename}"
-    file_path = UPLOAD_FOLDER / unique_name
-    audio_path = UPLOAD_FOLDER / f"{unique_name}.wav"
+
+    video_path = UPLOAD_DIR / unique_name
+    audio_path = UPLOAD_DIR / f"{unique_name}.wav"
 
     try:
 
-        # Save upload
-        with open(file_path, "wb") as buffer:
+        # Save uploaded file
+        with open(video_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
         # Extract audio
-        extract_audio(str(file_path), str(audio_path))
+        extract_audio(str(video_path), str(audio_path))
 
-        # Transcribe
+        # Transcribe audio
         transcript = transcribe_audio(str(audio_path))
 
-        # Gemini Prompt
+        # Prompt for Gemini
         prompt = f"""
 Return ONLY valid JSON.
 
@@ -167,7 +159,8 @@ Transcript:
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Clean files
-        for f in [file_path, audio_path]:
-            if os.path.exists(f):
-                os.remove(f)
+
+        # Clean temporary files
+        for path in [video_path, audio_path]:
+            if path.exists():
+                os.remove(path)
